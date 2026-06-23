@@ -12,6 +12,10 @@ interface Verb {
   pastPlural: string;
   pastParticiple: string;
   auxiliary: 'hebben' | 'zijn' | 'hebben/zijn';
+  translations?: {
+    en?: string;
+    ru?: string;
+  };
 }
 
 interface LearnSettingsProps {
@@ -28,6 +32,9 @@ export function LearnSettings({ verbs }: LearnSettingsProps) {
   const [selectedLetters, setSelectedLetters] = useState<Set<string>>(
     new Set(Array.from({ length: 26 }, (_, i) => String.fromCharCode(97 + i)))
   );
+  const [selectedVerbs, setSelectedVerbs] = useState<Set<string>>(
+    () => new Set(verbs.map((verb) => verb.infinitive))
+  );
   const [checkAnswers, setCheckAnswers] = useState(false);
   const [showInfinitive, setShowInfinitive] = useState(false);
   const [selectedTranslationLanguage, setSelectedTranslationLanguage] = useState<LanguageCode>('en');
@@ -43,10 +50,18 @@ export function LearnSettings({ verbs }: LearnSettingsProps) {
 
   // Filter verbs based on selected letters
   const filteredVerbs = useMemo(() => {
-    return verbs.filter((verb) =>
-      selectedLetters.has(verb.infinitive.charAt(0).toLowerCase())
-    );
+    return verbs
+      .filter((verb) => selectedLetters.has(verb.infinitive.charAt(0).toLowerCase()))
+      .sort((a, b) => a.infinitive.localeCompare(b.infinitive));
   }, [verbs, selectedLetters]);
+
+  const selectedFilteredVerbs = useMemo(() => {
+    return filteredVerbs.filter((verb) => selectedVerbs.has(verb.infinitive));
+  }, [filteredVerbs, selectedVerbs]);
+
+  const allVisibleVerbsSelected =
+    filteredVerbs.length > 0 &&
+    filteredVerbs.every((verb) => selectedVerbs.has(verb.infinitive));
 
   const toggleLetter = (letter: string) => {
     const newLetters = new Set(selectedLetters);
@@ -66,9 +81,34 @@ export function LearnSettings({ verbs }: LearnSettingsProps) {
     }
   };
 
+  const toggleVerb = (infinitive: string) => {
+    setSelectedVerbs((previous) => {
+      const next = new Set(previous);
+      if (next.has(infinitive)) {
+        next.delete(infinitive);
+      } else {
+        next.add(infinitive);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllVisibleVerbs = () => {
+    setSelectedVerbs((previous) => {
+      const next = new Set(previous);
+      if (allVisibleVerbsSelected) {
+        filteredVerbs.forEach((verb) => next.delete(verb.infinitive));
+      } else {
+        filteredVerbs.forEach((verb) => next.add(verb.infinitive));
+      }
+      return next;
+    });
+  };
+
   const handleStartTest = () => {
     const params = new URLSearchParams({
       letters: Array.from(selectedLetters).sort().join(','),
+      words: selectedFilteredVerbs.map((verb) => verb.infinitive).join(','),
       checkAnswers: checkAnswers ? '1' : '0',
       showInfinitive: showInfinitive ? '1' : '0',
       translationLanguage: selectedTranslationLanguage,
@@ -131,9 +171,75 @@ export function LearnSettings({ verbs }: LearnSettingsProps) {
           </div>
         </div>
 
-        {/* Verb Count */}
-        <div style={{ color: '#1a1a1a' }} className="text-lg font-semibold">
-          Words to practice: <span className="font-bold">{filteredVerbs.length}</span> / {verbs.length}
+        {/* Word Preview */}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <h2 className="text-2xl font-semibold" style={{ color: '#1a1a1a' }}>
+              Words in this test
+            </h2>
+            <button
+              onClick={toggleAllVisibleVerbs}
+              disabled={filteredVerbs.length === 0}
+              className="px-4 py-2 font-semibold rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: allVisibleVerbsSelected ? '#1a1a1a' : '#f8f8f8',
+                color: allVisibleVerbsSelected ? '#f8f8f8' : '#1a1a1a',
+                border: '2px solid #1a1a1a',
+              }}
+            >
+              {allVisibleVerbsSelected ? 'Deselect All Visible' : 'Select All Visible'}
+            </button>
+          </div>
+
+          <div style={{ color: '#1a1a1a' }} className="text-lg font-semibold">
+            Selected: <span className="font-bold">{selectedFilteredVerbs.length}</span> /{' '}
+            {filteredVerbs.length} visible ({verbs.length} total)
+          </div>
+
+          {filteredVerbs.length === 0 ? (
+            <p style={{ color: '#1a1a1a' }} className="text-lg">
+              No words match the current letter filter.
+            </p>
+          ) : (
+            <div
+              className="flex flex-col gap-2 max-h-80 overflow-y-auto rounded-lg p-4"
+              style={{
+                backgroundColor: '#f8f8f8',
+                border: '2px solid #1a1a1a',
+              }}
+            >
+              {filteredVerbs.map((verb) => {
+                const isSelected = selectedVerbs.has(verb.infinitive);
+                const translation = verb.translations?.[selectedTranslationLanguage];
+
+                return (
+                  <label
+                    key={verb.infinitive}
+                    className="flex items-center gap-3 cursor-pointer rounded-lg px-2 py-1 transition-colors"
+                    style={{
+                      backgroundColor: isSelected ? 'transparent' : 'rgba(0, 0, 0, 0.05)',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleVerb(verb.infinitive)}
+                      className="w-5 h-5 shrink-0"
+                      style={{ accentColor: '#1a1a1a' }}
+                    />
+                    <span style={{ color: '#1a1a1a' }} className="font-semibold">
+                      {verb.infinitive}
+                    </span>
+                    {translation ? (
+                      <span style={{ color: '#555' }} className="text-sm">
+                        {translation}
+                      </span>
+                    ) : null}
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Check Answers Toggle */}
@@ -202,10 +308,10 @@ export function LearnSettings({ verbs }: LearnSettingsProps) {
         {/* Start Button */}
         <button
           onClick={handleStartTest}
-          disabled={filteredVerbs.length === 0}
+          disabled={selectedFilteredVerbs.length === 0}
           className="px-8 py-4 text-xl font-semibold rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{
-            backgroundColor: filteredVerbs.length > 0 ? '#f8f8f8' : '#ccc',
+            backgroundColor: selectedFilteredVerbs.length > 0 ? '#f8f8f8' : '#ccc',
             color: '#1a1a1a',
             border: '2px solid #1a1a1a',
           }}

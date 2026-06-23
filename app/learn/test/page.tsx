@@ -9,13 +9,14 @@ type LanguageCode = 'en' | 'ru';
 type TestPageProps = {
   searchParams?: Promise<{
     letters?: string;
+    words?: string;
     checkAnswers?: string;
     showInfinitive?: string;
     translationLanguage?: string;
   }>;
 };
 
-async function fetchFilteredVerbs(lettersParam?: string): Promise<TestVerb[]> {
+async function fetchFilteredVerbs(lettersParam?: string, wordsParam?: string): Promise<TestVerb[]> {
   const db = openIrregularVerbsDb();
 
   try {
@@ -28,12 +29,26 @@ async function fetchFilteredVerbs(lettersParam?: string): Promise<TestVerb[]> {
         .map((letter) => letter.trim().toLowerCase())
         .filter(Boolean)
     );
+    const selectedWords = new Set(
+      (wordsParam ?? '')
+        .split(',')
+        .map((word) => word.trim())
+        .filter(Boolean)
+    );
 
-    if (selectedLetters.size === 0) {
-      return verbs;
+    let filtered = verbs;
+
+    if (selectedLetters.size > 0) {
+      filtered = filtered.filter((verb) =>
+        selectedLetters.has(verb.infinitive.charAt(0).toLowerCase())
+      );
     }
 
-    return verbs.filter((verb) => selectedLetters.has(verb.infinitive.charAt(0).toLowerCase()));
+    if (selectedWords.size > 0) {
+      filtered = filtered.filter((verb) => selectedWords.has(verb.infinitive));
+    }
+
+    return filtered;
   } finally {
     db.close();
   }
@@ -44,7 +59,10 @@ export default async function Test({ searchParams }: TestPageProps) {
   const translationLanguage: LanguageCode = resolvedSearchParams?.translationLanguage === 'ru' ? 'ru' : 'en';
   const checkAnswers = resolvedSearchParams?.checkAnswers === '1';
   const showInfinitive = resolvedSearchParams?.showInfinitive === '1';
-  const verbs = await fetchFilteredVerbs(resolvedSearchParams?.letters);
+  const verbs = await fetchFilteredVerbs(
+    resolvedSearchParams?.letters,
+    resolvedSearchParams?.words
+  );
 
   return (
     <TestRunner
