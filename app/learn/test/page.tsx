@@ -10,6 +10,7 @@ type TestPageProps = {
   searchParams?: Promise<{
     letters?: string;
     checkAnswers?: string;
+    showInfinitive?: string;
     translationLanguage?: string;
   }>;
 };
@@ -42,12 +43,14 @@ export default async function Test({ searchParams }: TestPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const translationLanguage: LanguageCode = resolvedSearchParams?.translationLanguage === 'ru' ? 'ru' : 'en';
   const checkAnswers = resolvedSearchParams?.checkAnswers === '1';
+  const showInfinitive = resolvedSearchParams?.showInfinitive === '1';
   const verbs = await fetchFilteredVerbs(resolvedSearchParams?.letters);
 
   return (
     <TestRunner
       verbs={verbs}
       checkAnswers={checkAnswers}
+      showInfinitive={showInfinitive}
       translationLanguage={translationLanguage}
     />
   );

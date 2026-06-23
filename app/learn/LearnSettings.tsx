@@ -29,6 +29,7 @@ export function LearnSettings({ verbs }: LearnSettingsProps) {
     new Set(Array.from({ length: 26 }, (_, i) => String.fromCharCode(97 + i)))
   );
   const [checkAnswers, setCheckAnswers] = useState(false);
+  const [showInfinitive, setShowInfinitive] = useState(false);
   const [selectedTranslationLanguage, setSelectedTranslationLanguage] = useState<LanguageCode>('en');
 
   // Get unique first letters from verbs
@@ -69,6 +70,7 @@ export function LearnSettings({ verbs }: LearnSettingsProps) {
     const params = new URLSearchParams({
       letters: Array.from(selectedLetters).sort().join(','),
       checkAnswers: checkAnswers ? '1' : '0',
+      showInfinitive: showInfinitive ? '1' : '0',
       translationLanguage: selectedTranslationLanguage,
     });
 
@@ -135,7 +137,7 @@ export function LearnSettings({ verbs }: LearnSettingsProps) {
         </div>
 
         {/* Check Answers Toggle */}
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col gap-4">
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -148,6 +150,21 @@ export function LearnSettings({ verbs }: LearnSettingsProps) {
             />
             <span style={{ color: '#1a1a1a' }} className="text-lg font-semibold">
               Check answers at the end
+            </span>
+          </label>
+
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showInfinitive}
+              onChange={(e) => setShowInfinitive(e.target.checked)}
+              className="w-6 h-6"
+              style={{
+                accentColor: '#1a1a1a',
+              }}
+            />
+            <span style={{ color: '#1a1a1a' }} className="text-lg font-semibold">
+              Show infinitive
             </span>
           </label>
         </div>

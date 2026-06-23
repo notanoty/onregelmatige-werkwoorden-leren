@@ -37,6 +37,7 @@ type AnswerRecord = {
 type TestRunnerProps = {
   verbs: TestVerb[];
   checkAnswers: boolean;
+  showInfinitive: boolean;
   translationLanguage: LanguageCode;
 };
 
@@ -83,7 +84,7 @@ function createEmptyAnswer(): UserAnswer {
   };
 }
 
-export function TestRunner({ verbs, checkAnswers, translationLanguage }: TestRunnerProps) {
+export function TestRunner({ verbs, checkAnswers, showInfinitive, translationLanguage }: TestRunnerProps) {
   const isAnswerMode = checkAnswers;
   const randomizedVerbs = useMemo(() => shuffleVerbs(verbs), [verbs]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -204,6 +205,7 @@ export function TestRunner({ verbs, checkAnswers, translationLanguage }: TestRun
             <p>Words shown: {answers.length}</p>
             <p>Translation language: {languageLabels[translationLanguage]}</p>
             <p>Check answers: {checkAnswers ? 'Yes' : 'No'}</p>
+            <p>Show infinitive: {showInfinitive ? 'Yes' : 'No'}</p>
             {isAnswerMode ? <p>Correct answers: {correctAnswersCount} / {answers.length}</p> : null}
           </div>
 
@@ -300,6 +302,12 @@ export function TestRunner({ verbs, checkAnswers, translationLanguage }: TestRun
         >
           <p className="text-sm font-semibold uppercase tracking-wide">Shown word</p>
           <h2 className="mt-3 text-3xl font-bold">{prompt}</h2>
+          {showInfinitive && currentVerb ? (
+            <div className="mt-6 pt-6 border-t-2" style={{ borderColor: '#1a1a1a' }}>
+              <p className="text-sm font-semibold uppercase tracking-wide">Infinitive</p>
+              <p className="mt-2 text-2xl font-bold">{currentVerb.infinitive}</p>
+            </div>
+          ) : null}
         </div>
 
         {isAnswerMode ? (
