@@ -28,8 +28,44 @@ const languageLabels: Record<LanguageCode, string> = {
 
 export function WordsTable({ verbs }: WordsTableProps) {
   const [selectedLanguage, setSelectedLanguage] = useState<LanguageCode>('en');
+
+  const availableLetters = useMemo(() => {
+    const letters = new Set<string>();
+    verbs.forEach((verb) => {
+      letters.add(verb.infinitive.charAt(0).toLowerCase());
+    });
+    return Array.from(letters).sort();
+  }, [verbs]);
+
+  const [selectedLetters, setSelectedLetters] = useState<Set<string>>(
+    () => new Set(availableLetters)
+  );
+
   const displayLanguageLabel = languageLabels[selectedLanguage];
-  const visibleVerbs = useMemo(() => verbs, [verbs]);
+
+  const visibleVerbs = useMemo(() => {
+    return verbs.filter((verb) =>
+      selectedLetters.has(verb.infinitive.charAt(0).toLowerCase())
+    );
+  }, [verbs, selectedLetters]);
+
+  const toggleLetter = (letter: string) => {
+    setSelectedLetters((previous) => {
+      const next = new Set(previous);
+      if (next.has(letter)) {
+        next.delete(letter);
+      } else {
+        next.add(letter);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllLetters = () => {
+    setSelectedLetters((previous) =>
+      previous.size === availableLetters.length ? new Set() : new Set(availableLetters)
+    );
+  };
 
   return (
     <div className="flex flex-col items-center justify-start min-h-screen font-sans py-8" style={{ backgroundColor: '#FFDAB9' }}>
@@ -70,7 +106,42 @@ export function WordsTable({ verbs }: WordsTableProps) {
             <option value="ru">Russian</option>
           </select>
           <div style={{ color: '#1a1a1a' }} className="text-lg font-semibold">
-            Total words: {visibleVerbs.length} | Showing: {displayLanguageLabel}
+            Words shown: {visibleVerbs.length} / {verbs.length} | Translation: {displayLanguageLabel}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <h2 className="text-2xl font-semibold" style={{ color: '#1a1a1a' }}>
+            Filter by Starting Letter
+          </h2>
+          <button
+            type="button"
+            onClick={toggleAllLetters}
+            className="px-4 py-2 font-semibold rounded-lg transition-all duration-200 hover:scale-105 w-fit"
+            style={{
+              backgroundColor: selectedLetters.size === availableLetters.length ? '#1a1a1a' : '#f8f8f8',
+              color: selectedLetters.size === availableLetters.length ? '#f8f8f8' : '#1a1a1a',
+              border: '2px solid #1a1a1a',
+            }}
+          >
+            {selectedLetters.size === availableLetters.length ? 'Deselect All' : 'Select All'}
+          </button>
+          <div className="grid grid-cols-6 gap-2 sm:grid-cols-8 md:grid-cols-10">
+            {availableLetters.map((letter) => (
+              <button
+                key={letter}
+                type="button"
+                onClick={() => toggleLetter(letter)}
+                className="px-3 py-2 font-semibold rounded-lg transition-all duration-200 hover:scale-105"
+                style={{
+                  backgroundColor: selectedLetters.has(letter) ? '#1a1a1a' : '#f8f8f8',
+                  color: selectedLetters.has(letter) ? '#f8f8f8' : '#1a1a1a',
+                  border: '2px solid #1a1a1a',
+                }}
+              >
+                {letter.toUpperCase()}
+              </button>
+            ))}
           </div>
         </div>
 
