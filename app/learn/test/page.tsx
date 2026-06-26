@@ -11,6 +11,7 @@ type TestPageProps = {
     letters?: string;
     words?: string;
     checkAnswers?: string;
+    showAnswerAfterCard?: string;
     showInfinitive?: string;
     translationLanguage?: string;
   }>;
@@ -58,6 +59,7 @@ export default async function Test({ searchParams }: TestPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const translationLanguage: LanguageCode = resolvedSearchParams?.translationLanguage === 'ru' ? 'ru' : 'en';
   const checkAnswers = resolvedSearchParams?.checkAnswers === '1';
+  const showAnswerAfterCard = resolvedSearchParams?.showAnswerAfterCard === '1';
   const showInfinitive = resolvedSearchParams?.showInfinitive === '1';
   const verbs = await fetchFilteredVerbs(
     resolvedSearchParams?.letters,
@@ -68,6 +70,7 @@ export default async function Test({ searchParams }: TestPageProps) {
     <TestRunner
       verbs={verbs}
       checkAnswers={checkAnswers}
+      showAnswerAfterCard={showAnswerAfterCard}
       showInfinitive={showInfinitive}
       translationLanguage={translationLanguage}
     />

@@ -37,6 +37,7 @@ type AnswerRecord = {
 type TestRunnerProps = {
   verbs: TestVerb[];
   checkAnswers: boolean;
+  showAnswerAfterCard: boolean;
   showInfinitive: boolean;
   translationLanguage: LanguageCode;
 };
@@ -84,12 +85,142 @@ function createEmptyAnswer(): UserAnswer {
   };
 }
 
-export function TestRunner({ verbs, checkAnswers, showInfinitive, translationLanguage }: TestRunnerProps) {
+function isAnswerCorrect(userAnswer: UserAnswer, verb: TestVerb): boolean {
+  return (
+    matchesExpectedValue(userAnswer.infinitive, verb.infinitive) &&
+    matchesExpectedValue(userAnswer.pastSingular, verb.pastSingular) &&
+    matchesExpectedValue(userAnswer.pastPlural, verb.pastPlural) &&
+    matchesExpectedValue(userAnswer.pastParticiple, verb.pastParticiple) &&
+    matchesExpectedValue(userAnswer.auxiliary, verb.auxiliary)
+  );
+}
+
+type AnswerField = keyof UserAnswer;
+
+const answerFieldLabels: Record<AnswerField, string> = {
+  infinitive: 'Infinitive',
+  pastSingular: 'Past singular',
+  pastPlural: 'Past plural',
+  pastParticiple: 'Past participle',
+  auxiliary: 'Auxiliary verb',
+};
+
+function getExpectedValue(verb: TestVerb, field: AnswerField): string {
+  return verb[field];
+}
+
+function AnswerReveal({
+  record,
+  checkAnswers,
+  cardNumber,
+  totalWords,
+}: {
+  record: AnswerRecord;
+  checkAnswers: boolean;
+  cardNumber: number;
+  totalWords: number;
+}) {
+  const fields: AnswerField[] = [
+    'infinitive',
+    'pastSingular',
+    'pastPlural',
+    'pastParticiple',
+    'auxiliary',
+  ];
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div style={{ color: '#1a1a1a' }} className="text-lg font-semibold">
+        <p>Card {cardNumber} / {totalWords}</p>
+        {checkAnswers ? (
+          <p
+            className="mt-2 text-xl font-bold"
+            style={{ color: record.isCorrect ? '#166534' : '#991b1b' }}
+          >
+            {record.isCorrect ? 'Correct' : 'Incorrect'}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="overflow-x-auto rounded-lg border-2" style={{ borderColor: '#1a1a1a' }}>
+        <table className="w-full">
+          <thead>
+            <tr style={{ backgroundColor: '#1a1a1a' }}>
+              <th className="px-4 py-3 text-left font-semibold" style={{ color: '#f8f8f8' }}>Shown word</th>
+              {fields.map((field) => (
+                <th key={field} className="px-4 py-3 text-left font-semibold" style={{ color: '#f8f8f8' }}>
+                  {answerFieldLabels[field]}
+                </th>
+              ))}
+              {checkAnswers ? (
+                <th className="px-4 py-3 text-left font-semibold" style={{ color: '#f8f8f8' }}>Result</th>
+              ) : null}
+            </tr>
+          </thead>
+          <tbody>
+            <tr style={{ backgroundColor: '#f8f8f8' }}>
+              <td className="px-4 py-3" style={{ color: '#1a1a1a' }}>{record.prompt}</td>
+              {fields.map((field) => {
+                const expected = getExpectedValue(record.verb, field);
+                const userValue = record.userAnswer[field] || '—';
+                const fieldCorrect = matchesExpectedValue(record.userAnswer[field], expected);
+
+                if (checkAnswers) {
+                  return (
+                    <td
+                      key={field}
+                      className="px-4 py-3"
+                      style={{
+                        color: '#1a1a1a',
+                        backgroundColor: fieldCorrect ? '#f0fdf4' : '#fef2f2',
+                      }}
+                    >
+                      <div className="font-semibold">{userValue}</div>
+                      {!fieldCorrect ? (
+                        <div className="mt-1 text-sm" style={{ color: '#991b1b' }}>
+                          {expected}
+                        </div>
+                      ) : null}
+                    </td>
+                  );
+                }
+
+                return (
+                  <td key={field} className="px-4 py-3 font-semibold" style={{ color: '#1a1a1a' }}>
+                    {expected}
+                  </td>
+                );
+              })}
+              {checkAnswers ? (
+                <td
+                  className="px-4 py-3 font-semibold"
+                  style={{ color: record.isCorrect ? '#166534' : '#991b1b' }}
+                >
+                  {record.isCorrect ? 'Correct' : 'Incorrect'}
+                </td>
+              ) : null}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export function TestRunner({
+  verbs,
+  checkAnswers,
+  showAnswerAfterCard,
+  showInfinitive,
+  translationLanguage,
+}: TestRunnerProps) {
   const isAnswerMode = checkAnswers;
-  const randomizedVerbs = useMemo(() => shuffleVerbs(verbs), [verbs]);
+  const [shuffleKey, setShuffleKey] = useState(0);
+  const randomizedVerbs = useMemo(() => shuffleVerbs(verbs), [verbs, shuffleKey]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentAnswer, setCurrentAnswer] = useState<UserAnswer>(createEmptyAnswer());
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
+  const [revealedAnswer, setRevealedAnswer] = useState<AnswerRecord | null>(null);
   const [isFinished, setIsFinished] = useState(false);
 
   const currentVerb = randomizedVerbs[currentIndex];
@@ -113,24 +244,21 @@ export function TestRunner({ verbs, checkAnswers, showInfinitive, translationLan
       return;
     }
 
-    const isCorrect =
-      matchesExpectedValue(currentAnswer.infinitive, currentVerb.infinitive) &&
-      matchesExpectedValue(currentAnswer.pastSingular, currentVerb.pastSingular) &&
-      matchesExpectedValue(currentAnswer.pastPlural, currentVerb.pastPlural) &&
-      matchesExpectedValue(currentAnswer.pastParticiple, currentVerb.pastParticiple) &&
-      matchesExpectedValue(currentAnswer.auxiliary, currentVerb.auxiliary);
+    const answerRecord: AnswerRecord = {
+      verb: currentVerb,
+      prompt,
+      userAnswer: currentAnswer,
+      isCorrect: isAnswerCorrect(currentAnswer, currentVerb),
+    };
 
-    setAnswers((previous) => [
-      ...previous,
-      {
-        verb: currentVerb,
-        prompt,
-        userAnswer: currentAnswer,
-        isCorrect,
-      },
-    ]);
+    setAnswers((previous) => [...previous, answerRecord]);
 
     const isLastCard = currentIndex === randomizedVerbs.length - 1;
+
+    if (showAnswerAfterCard) {
+      setRevealedAnswer(answerRecord);
+      return;
+    }
 
     if (isLastCard) {
       setIsFinished(true);
@@ -140,6 +268,35 @@ export function TestRunner({ verbs, checkAnswers, showInfinitive, translationLan
 
     setCurrentIndex((previous) => previous + 1);
     setCurrentAnswer(createEmptyAnswer());
+  };
+
+  const continueAfterReveal = () => {
+    if (!revealedAnswer) {
+      return;
+    }
+
+    const revealedIndex = answers.length;
+    const isLastCard = revealedIndex === randomizedVerbs.length;
+
+    setRevealedAnswer(null);
+
+    if (isLastCard) {
+      setIsFinished(true);
+      setCurrentAnswer(createEmptyAnswer());
+      return;
+    }
+
+    setCurrentIndex((previous) => previous + 1);
+    setCurrentAnswer(createEmptyAnswer());
+  };
+
+  const resetTest = () => {
+    setShuffleKey((previous) => previous + 1);
+    setCurrentIndex(0);
+    setCurrentAnswer(createEmptyAnswer());
+    setAnswers([]);
+    setRevealedAnswer(null);
+    setIsFinished(false);
   };
 
   if (totalWords === 0) {
@@ -205,6 +362,7 @@ export function TestRunner({ verbs, checkAnswers, showInfinitive, translationLan
             <p>Words shown: {answers.length}</p>
             <p>Translation language: {languageLabels[translationLanguage]}</p>
             <p>Check answers: {checkAnswers ? 'Yes' : 'No'}</p>
+            <p>Show answer after card: {showAnswerAfterCard ? 'Yes' : 'No'}</p>
             <p>Show infinitive: {showInfinitive ? 'Yes' : 'No'}</p>
             {isAnswerMode ? <p>Correct answers: {correctAnswersCount} / {answers.length}</p> : null}
           </div>
@@ -260,6 +418,63 @@ export function TestRunner({ verbs, checkAnswers, showInfinitive, translationLan
               </tbody>
             </table>
           </div>
+
+          <button
+            type="button"
+            onClick={resetTest}
+            className="px-8 py-4 text-xl font-semibold rounded-lg transition-all duration-200 hover:scale-105"
+            style={{ backgroundColor: '#f8f8f8', color: '#1a1a1a', border: '2px solid #1a1a1a' }}
+          >
+            Reset
+          </button>
+        </main>
+      </div>
+    );
+  }
+
+  if (revealedAnswer) {
+    const revealedCardNumber = answers.length;
+
+    return (
+      <div className="flex flex-col items-center justify-start min-h-screen font-sans py-8" style={{ backgroundColor: '#FFDAB9' }}>
+        <main className="flex flex-col gap-8 px-8 max-w-6xl w-full">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <h1 className="text-4xl font-bold" style={{ color: '#1a1a1a' }}>
+              Answer
+            </h1>
+            <div className="flex gap-3 flex-wrap">
+              <Link
+                href="/"
+                className="px-4 py-2 text-lg font-semibold rounded-lg transition-all duration-200 hover:scale-105"
+                style={{ backgroundColor: '#f8f8f8', color: '#1a1a1a', border: '2px solid #1a1a1a' }}
+              >
+                ← Home
+              </Link>
+              <Link
+                href="/learn"
+                className="px-4 py-2 text-lg font-semibold rounded-lg transition-all duration-200 hover:scale-105"
+                style={{ backgroundColor: '#f8f8f8', color: '#1a1a1a', border: '2px solid #1a1a1a' }}
+              >
+                Back to Settings
+              </Link>
+            </div>
+          </div>
+
+          <AnswerReveal
+            record={revealedAnswer}
+            checkAnswers={checkAnswers}
+            cardNumber={revealedCardNumber}
+            totalWords={totalWords}
+          />
+
+          <button
+            type="button"
+            onClick={continueAfterReveal}
+            className="px-8 py-4 text-xl font-semibold rounded-lg transition-all duration-200 hover:scale-105"
+            style={{ backgroundColor: '#f8f8f8', color: '#1a1a1a', border: '2px solid #1a1a1a' }}
+          >
+            {revealedCardNumber === totalWords ? 'View Results' : 'Next Card'}
+          </button>
         </main>
       </div>
     );
