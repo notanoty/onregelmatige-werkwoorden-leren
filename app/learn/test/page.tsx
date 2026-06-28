@@ -3,21 +3,22 @@ import {
   listIrregularVerbsWithTranslations,
   openIrregularVerbsDb,
 } from '@/lib/db/irregularVerbsDb';
-import { TestRunner, type TestVerb } from './TestRunner';
+import { TestRunner } from '@/components/test-runner';
+import type { LanguageCode, TestMode, TestVerb } from '@/lib/types';
 
-type LanguageCode = 'en' | 'ru';
 type TestPageProps = {
   searchParams?: Promise<{
     letters?: string;
     words?: string;
+    mode?: string;
+    /** Legacy param: `checkAnswers=1` maps to the typed mode. */
     checkAnswers?: string;
-    showAnswerAfterCard?: string;
     showInfinitive?: string;
     translationLanguage?: string;
   }>;
 };
 
-async function fetchFilteredVerbs(lettersParam?: string, wordsParam?: string): Promise<TestVerb[]> {
+function fetchFilteredVerbs(lettersParam?: string, wordsParam?: string): TestVerb[] {
   const db = openIrregularVerbsDb();
 
   try {
@@ -57,11 +58,14 @@ async function fetchFilteredVerbs(lettersParam?: string, wordsParam?: string): P
 
 export default async function Test({ searchParams }: TestPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const translationLanguage: LanguageCode = resolvedSearchParams?.translationLanguage === 'ru' ? 'ru' : 'en';
-  const checkAnswers = resolvedSearchParams?.checkAnswers === '1';
-  const showAnswerAfterCard = resolvedSearchParams?.showAnswerAfterCard === '1';
+  const translationLanguage: LanguageCode =
+    resolvedSearchParams?.translationLanguage === 'ru' ? 'ru' : 'en';
+  const mode: TestMode =
+    resolvedSearchParams?.mode === 'typed' || resolvedSearchParams?.checkAnswers === '1'
+      ? 'typed'
+      : 'flashcard';
   const showInfinitive = resolvedSearchParams?.showInfinitive === '1';
-  const verbs = await fetchFilteredVerbs(
+  const verbs = fetchFilteredVerbs(
     resolvedSearchParams?.letters,
     resolvedSearchParams?.words
   );
@@ -69,11 +73,9 @@ export default async function Test({ searchParams }: TestPageProps) {
   return (
     <TestRunner
       verbs={verbs}
-      checkAnswers={checkAnswers}
-      showAnswerAfterCard={showAnswerAfterCard}
+      mode={mode}
       showInfinitive={showInfinitive}
       translationLanguage={translationLanguage}
     />
   );
 }
-
