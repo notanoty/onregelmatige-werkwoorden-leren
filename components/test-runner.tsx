@@ -194,7 +194,6 @@ function advance(state: RunnerState): RunnerState {
 type RunnerAction =
   | { type: 'RESTART'; payload: InitArgs }
   | { type: 'REVEAL' }
-  | { type: 'HIDE' }
   | { type: 'SET_TYPED'; field: AnswerField; value: string }
   | { type: 'GRADE'; result: GradeResult }
   | { type: 'SKIP' };
@@ -206,9 +205,6 @@ function reducer(state: RunnerState, action: RunnerAction): RunnerState {
 
     case 'REVEAL':
       return state.phase === 'prompt' ? { ...state, phase: 'revealed' } : state;
-
-    case 'HIDE':
-      return state.phase === 'revealed' ? { ...state, phase: 'prompt' } : state;
 
     case 'SET_TYPED':
       return {
@@ -324,33 +320,59 @@ const REVEAL_ROWS: { field: AnswerField; label: string }[] = ANSWER_FIELDS.map((
 
 /**
  * Flashcard reveal: a full-bleed answer card that slides up to cover the prompt.
- * The conjugation uses the same table styling as the main words table, on a
- * peach panel with a soft inset vignette.
+ * Shows the conjugation table (same style as the main words table) plus the
+ * translation. Clicking "Next →" counts as correct and advances the queue.
  */
-function ConjugationReveal({ verb, onHide }: { verb: TestVerb; onHide: () => void }) {
+function ConjugationReveal({
+  verb,
+  translation,
+  onNext,
+}: {
+  verb: TestVerb;
+  translation: string;
+  onNext: () => void;
+}) {
   return (
-    <div className="flex h-full w-full flex-col gap-5 bg-background p-6 text-foreground shadow-[inset_0_0_70px_rgba(120,72,30,0.18)]">
+    <div className="flex h-full w-full flex-col gap-4 bg-background p-4 text-foreground shadow-[inset_0_0_70px_rgba(120,72,30,0.18)] sm:gap-5 sm:p-6">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
         Answer
       </p>
       <div className="overflow-hidden rounded-lg border-2 border-foreground">
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow className="bg-primary hover:bg-primary">
-              <TableHead className="px-4 py-3 text-primary-foreground">Infinitive</TableHead>
-              <TableHead className="px-4 py-3 text-primary-foreground">Past Singular</TableHead>
-              <TableHead className="px-4 py-3 text-primary-foreground">Past Plural</TableHead>
-              <TableHead className="px-4 py-3 text-primary-foreground">Past Participle</TableHead>
+              <TableHead className="whitespace-normal px-2 py-2 align-bottom text-xs leading-tight text-primary-foreground sm:px-3 sm:text-sm">
+                Translation
+              </TableHead>
+              <TableHead className="whitespace-normal px-2 py-2 align-bottom text-xs leading-tight text-primary-foreground sm:px-3 sm:text-sm">
+                Infinitive
+              </TableHead>
+              <TableHead className="whitespace-normal px-2 py-2 align-bottom text-xs leading-tight text-primary-foreground sm:px-3 sm:text-sm">
+                Past Singular
+              </TableHead>
+              <TableHead className="whitespace-normal px-2 py-2 align-bottom text-xs leading-tight text-primary-foreground sm:px-3 sm:text-sm">
+                Past Plural
+              </TableHead>
+              <TableHead className="whitespace-normal px-2 py-2 align-bottom text-xs leading-tight text-primary-foreground sm:px-3 sm:text-sm">
+                Past Participle
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow className="bg-card">
-              <TableCell className="px-4 py-3 font-semibold text-card-foreground">
+              <TableCell className="whitespace-normal break-words px-2 py-2 align-top text-sm text-card-foreground sm:px-3">
+                {translation}
+              </TableCell>
+              <TableCell className="whitespace-normal break-words px-2 py-2 align-top text-sm font-semibold text-card-foreground sm:px-3">
                 {verb.infinitive}
               </TableCell>
-              <TableCell className="px-4 py-3 text-card-foreground">{verb.pastSingular}</TableCell>
-              <TableCell className="px-4 py-3 text-card-foreground">{verb.pastPlural}</TableCell>
-              <TableCell className="px-4 py-3 text-card-foreground">
+              <TableCell className="whitespace-normal break-words px-2 py-2 align-top text-sm text-card-foreground sm:px-3">
+                {verb.pastSingular}
+              </TableCell>
+              <TableCell className="whitespace-normal break-words px-2 py-2 align-top text-sm text-card-foreground sm:px-3">
+                {verb.pastPlural}
+              </TableCell>
+              <TableCell className="whitespace-normal break-words px-2 py-2 align-top text-sm text-card-foreground sm:px-3">
                 {verb.pastParticiple} <span className="font-semibold">({verb.auxiliary})</span>
               </TableCell>
             </TableRow>
@@ -358,8 +380,8 @@ function ConjugationReveal({ verb, onHide }: { verb: TestVerb; onHide: () => voi
         </Table>
       </div>
       <div className="mt-auto flex justify-center">
-        <Button type="button" onClick={onHide} variant="link" className={TEXT_BUTTON_CLASS}>
-          Hide answer
+        <Button type="button" onClick={onNext} className={ACTION_BUTTON_CLASS}>
+          Next
         </Button>
       </div>
     </div>
@@ -458,13 +480,6 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
     dispatch({ type: 'REVEAL' });
   };
 
-  const hide = () => {
-    if (phase !== 'revealed') {
-      return;
-    }
-    dispatch({ type: 'HIDE' });
-  };
-
   const grade = (result: GradeResult) => {
     if (!current || phase !== 'revealed') {
       return;
@@ -511,12 +526,7 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
       if (inField) {
         return;
       }
-      if (event.key === 'h' || event.key === 'H') {
-        event.preventDefault();
-        hide();
-        return;
-      }
-      if (event.key === '1' || event.key === 'k' || event.key === 'K') {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'k' || event.key === 'K' || event.key === '1') {
         event.preventDefault();
         grade('knew');
       } else if (event.key === '2' || event.key === 'd' || event.key === 'D') {
@@ -657,14 +667,6 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
     <div className="flex flex-wrap gap-3">
       <Button
         type="button"
-        onClick={() => grade('knew')}
-        variant="secondary"
-        className={cn(GRADE_BUTTON_CLASS, 'bg-success text-success-foreground hover:bg-success/90')}
-      >
-        ✓ Knew it
-      </Button>
-      <Button
-        type="button"
         onClick={() => grade('didnt')}
         variant="destructive"
         className={GRADE_BUTTON_CLASS}
@@ -691,7 +693,7 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
         <>
           {/* The prompt word stays put; the opaque answer panel slides up over
               it to reveal and slides back down to hide. */}
-          <Card className="relative flex min-h-[24rem] flex-col items-center justify-center gap-0 overflow-hidden rounded-3xl border-2 border-foreground bg-card p-8 text-center text-card-foreground">
+          <Card className="relative flex min-h-[24rem] flex-col items-center justify-center gap-0 overflow-hidden rounded-3xl border-2 border-foreground bg-card p-5 text-center text-card-foreground sm:p-8">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Shown word
             </p>
@@ -715,8 +717,8 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <Button type="button" onClick={reveal} variant="link" className={TEXT_BUTTON_CLASS}>
-                    Reveal answer
+                  <Button type="button" onClick={reveal} variant="default" className={ACTION_BUTTON_CLASS}>
+                    Reveal
                   </Button>
                 </motion.div>
               ) : (
@@ -728,7 +730,11 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
                   exit={{ y: '100%' }}
                   transition={{ duration: 0.42, ease: [0.32, 0.72, 0, 1] }}
                 >
-                  <ConjugationReveal verb={current} onHide={hide} />
+                  <ConjugationReveal
+                    verb={current}
+                    translation={prompt}
+                    onNext={() => grade('knew')}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -804,9 +810,11 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
       )}
 
       <p className="text-sm text-muted-foreground">
-        {phase === 'prompt'
-          ? `${mode === 'typed' ? 'Enter' : 'Space'} to reveal · S to skip`
-          : '1 / K — Knew it · 2 / D — Didn’t know · H — Hide · S — Skip'}
+        {phase === "prompt" ? (
+          <>{mode === "typed" ? "Enter" : "Space"} to reveal &middot; S to skip</>
+        ) : (
+          <>Enter / K &mdash; Next (knew) &middot; 2 / D &mdash; Didn&apos;t know &middot; S &mdash; Skip</>
+        )}
       </p>
     </PageShell>
   );
