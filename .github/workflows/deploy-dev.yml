@@ -17,7 +17,7 @@ jobs:
           username: ${{ secrets.DO_USERNAME }}
           key: ${{ secrets.DO_SSH_KEY }}
           script: |
-            cd /var/www/onregelmatige-werkwoorden-leren-dev 
+            cd /var/www/html/onregelmatige-werkwoorden-leren-dev 
             
             git pull origin dev 
             
