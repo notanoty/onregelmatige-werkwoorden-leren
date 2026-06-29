@@ -186,6 +186,22 @@ export function initializeAndSeedIrregularVerbsDb(db: Database.Database = openIr
 }
 
 
+/**
+ * Opens the database, ensures it is seeded, returns every verb with its
+ * translations, and closes the connection. Shared by the server pages that
+ * just need the full list.
+ */
+export function getAllVerbs(): VerbWithTranslations[] {
+  const db = openIrregularVerbsDb();
+
+  try {
+    initializeAndSeedIrregularVerbsDb(db);
+    return listIrregularVerbsWithTranslations(db);
+  } finally {
+    db.close();
+  }
+}
+
 export function listIrregularVerbsWithTranslations(
   db: Database.Database = openIrregularVerbsDb()
 ): VerbWithTranslations[] {
