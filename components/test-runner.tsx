@@ -665,14 +665,14 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
   );
   const gradeButtons = (
     <div className="flex flex-wrap gap-3">
-      <Button
-        type="button"
-        onClick={() => grade('didnt')}
-        variant="destructive"
-        className={GRADE_BUTTON_CLASS}
-      >
-        ✗ Didn&apos;t know it
-      </Button>
+      {/*<Button*/}
+      {/*  type="button"*/}
+      {/*  onClick={() => grade('didnt')}*/}
+      {/*  variant="destructive"*/}
+      {/*  className={GRADE_BUTTON_CLASS}*/}
+      {/*>*/}
+      {/*  ✗ Didn&apos;t know it*/}
+      {/*</Button>*/}
       {skipButton}
     </div>
   );
