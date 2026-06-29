@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="800"
+   height="800"
+   viewBox="0 0 211.66666 211.66667"
+   version="1.1"
+   id="svg1"
+   sodipodi:docname="icon.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#505050"
+     bordercolor="#eeeeee"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#505050"
+     inkscape:zoom="0.27458747"
+     inkscape:cx="1245.5048"
+     inkscape:cy="968.72593"
+     inkscape:window-width="1470"
+     inkscape:window-height="923"
+     inkscape:window-x="0"
+     inkscape:window-y="33"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="svg1" />
+  <defs
+     id="defs1" />
+  <g
+     id="layer1">
+    <circle
+       style="fill:#f2f2f2;stroke-width:0.304691"
+       id="path3"
+       cx="106.089"
+       cy="106.98238"
+       r="105.19563" />
+    <ellipse
+       style="fill:#f2f2f2;stroke-width:0.264583"
+       id="path4"
+       cx="133.33713"
+       cy="135.34723"
+       rx="1.563417"
+       ry="8.4871197" />
+    <text
+       xml:space="preserve"
+       style="font-size:162.062px;writing-mode:lr-tb;direction:ltr;fill:#f2f2f2;stroke-width:13.5052"
+       x="16.242617"
+       y="198.82671"
+       id="text5"
+       transform="scale(1.2584768,0.7946114)"><tspan
+         id="tspan5"
+         style="stroke-width:13.5052"
+         x="16.242617"
+         y="198.82671">O</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:3.175px;writing-mode:lr-tb;direction:ltr;white-space:pre;inline-size:44.4629;display:inline;fill:#4d4d4d;stroke-width:0.264583"
+       x="53.332539"
+       y="85.713005"
+       id="text6"
+       transform="matrix(36.861617,0,0,59.587687,-1935.0339,-4931.2067)"><tspan
+         x="53.332539"
+         y="85.713005"
+         id="tspan4"><tspan
+           style="font-family:'PT Mono';-inkscape-font-specification:'PT Mono, @wght=725';font-variation-settings:'wght' 725"
+           id="tspan3">OW</tspan></tspan></text>
+  </g>
+</svg>
