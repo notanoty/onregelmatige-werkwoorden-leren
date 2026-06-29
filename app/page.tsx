@@ -7,7 +7,7 @@ import { ROUTES } from '@/lib/constants';
 export default function Home() {
   return (
     <PageContainer width="sm" align="center">
-      <h1 className="text-4xl font-bold text-foreground">Onregelmatige Werkwoorden</h1>
+      <h1 className="text-4xl font-bold text-foreground">Onregelmatige Werkwoorden Dev</h1>
       <div className="flex flex-col gap-4 w-full">
         <Button
           asChild
