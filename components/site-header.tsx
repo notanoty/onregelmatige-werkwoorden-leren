@@ -21,9 +21,9 @@ export function SiteHeader() {
       <div className={cn('mx-auto flex w-full items-center justify-between gap-4 py-3', FRAME_WIDTH, PAGE_GUTTER)}>
         <Link
           href={ROUTES.home}
-          className="border-2 border-foreground px-3 py-1 font-mono text-sm font-bold tracking-widest text-foreground uppercase transition-transform hover:scale-105"
+          className="w-fit border-2 border-foreground bg-card px-3 py-1 font-mono text-sm font-bold uppercase tracking-widest text-foreground"
         >
-          logo
+          werkwoorden
         </Link>
         <nav className="flex items-center gap-1 sm:gap-2">
           {NAV_LINKS.map((link) => {
