@@ -17,6 +17,7 @@ import { PageShell, NAV_BUTTON_CLASS } from '@/components/page-shell';
 import { LANGUAGE_OPTIONS, ROUTES } from '@/lib/constants';
 import type { LanguageCode, TestMode, Verb } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import {stringify} from "node:querystring";
 
 const MODE_OPTIONS: ReadonlyArray<{ value: TestMode; label: string; hint: string }> = [
   { value: 'flashcard', label: 'Flashcards', hint: 'Reveal the answer, then grade yourself' },
@@ -29,17 +30,6 @@ interface LearnSettingsProps {
 
 export function LearnSettings({ verbs }: LearnSettingsProps) {
   const router = useRouter();
-  const [selectedLetters, setSelectedLetters] = useState<Set<string>>(
-    new Set(Array.from({ length: 26 }, (_, i) => String.fromCharCode(97 + i)))
-  );
-  const [selectedVerbs, setSelectedVerbs] = useState<Set<string>>(
-    () => new Set(verbs.map((verb) => verb.infinitive))
-  );
-  const [mode, setMode] = useState<TestMode>('flashcard');
-  const [showInfinitive, setShowInfinitive] = useState(false);
-  const [translationLanguage, setTranslationLanguage] = useState<LanguageCode>('en');
-
-  // Get unique first letters from verbs
   const availableLetters = useMemo(() => {
     const letters = new Set<string>();
     verbs.forEach((verb) => {
@@ -47,6 +37,17 @@ export function LearnSettings({ verbs }: LearnSettingsProps) {
     });
     return Array.from(letters).sort();
   }, [verbs]);
+
+  const [selectedLetters, setSelectedLetters] = useState<Set<string>>(
+      () => new Set(availableLetters)
+  );
+
+  const [selectedVerbs, setSelectedVerbs] = useState<Set<string>>(
+    () => new Set(verbs.map((verb) => verb.infinitive))
+  );
+  const [mode, setMode] = useState<TestMode>('flashcard');
+  const [showInfinitive, setShowInfinitive] = useState(false);
+  const [translationLanguage, setTranslationLanguage] = useState<LanguageCode>('en');
 
   // Filter verbs based on selected letters
   const filteredVerbs = useMemo(() => {
@@ -59,10 +60,11 @@ export function LearnSettings({ verbs }: LearnSettingsProps) {
     return filteredVerbs.filter((verb) => selectedVerbs.has(verb.infinitive));
   }, [filteredVerbs, selectedVerbs]);
 
-  const allLettersSelected = selectedLetters.size === availableLetters.length;
   const allVisibleVerbsSelected =
     filteredVerbs.length > 0 &&
     filteredVerbs.every((verb) => selectedVerbs.has(verb.infinitive));
+
+  const allLettersSelected = selectedLetters.size === availableLetters.length;
 
   const toggleLetter = (letter: string) => {
     setSelectedLetters((previous) => {
