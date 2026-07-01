@@ -10,6 +10,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Check out the repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 3. Install dependencies on the runner
+      - name: Install dependencies
+        run: npm install
+
+      # 4. Run Linting
+      - name: Lint
+        run: npm run lint
+
+      # 5. Deploying via SSH (only runs if previous steps succeed)
       - name: Deploying via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -18,11 +37,7 @@ jobs:
           key: ${{ secrets.DO_SSH_KEY }}
           script: |
             cd /var/www/html/onregelmatige-werkwoorden-leren-dev 
-            
             git pull origin dev 
-            
             npm install
-            
             npm run build
-            
             pm2 restart dev-app

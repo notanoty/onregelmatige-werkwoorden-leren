@@ -26,7 +26,18 @@ interface WordsTableProps {
   verbs: Verb[];
 }
 
+/** Full /words page: brand chrome (title + Home link) wrapping the browser. */
 export function WordsTable({ verbs }: WordsTableProps) {
+  return (
+    <PageShell title="All Irregular Words" width="xl">
+      <WordsBrowser verbs={verbs} />
+    </PageShell>
+  );
+}
+
+/** Filter controls + table only — no page chrome, so it can be embedded
+ *  (e.g. in the landing page) as well as inside {@link WordsTable}. */
+export function WordsBrowser({ verbs }: WordsTableProps) {
   const [selectedLanguage, setSelectedLanguage] = useState<LanguageCode>('en');
 
   const availableLetters = useMemo(() => {
@@ -66,7 +77,7 @@ export function WordsTable({ verbs }: WordsTableProps) {
   };
 
   return (
-    <PageShell title="All Irregular Words" width="xl">
+    <>
         <div className="flex items-center gap-3 flex-wrap">
           <Label htmlFor="translation-language" className="text-lg font-semibold text-foreground">
             Translation language
@@ -156,6 +167,6 @@ export function WordsTable({ verbs }: WordsTableProps) {
             <p className="text-lg">No words found.</p>
           </div>
         )}
-    </PageShell>
+    </>
   );
 }
