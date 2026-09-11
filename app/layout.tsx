@@ -37,7 +37,7 @@ export default function RootLayout({
         {process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID && (
           <Script
             defer
-            src="http://146.190.229.9:3005/script.js"
+            src="/stats/script.js"
             data-website-id={process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID}
             data-domains={process.env.NEXT_PUBLIC_UMAMI_DOMAINS}
             strategy="afterInteractive"
