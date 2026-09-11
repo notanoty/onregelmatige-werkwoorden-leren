@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const UMAMI_ORIGIN = "http://146.190.229.9:3005";
+const UMAMI_ORIGIN = "https://umami.notanoty.com";
 
 const nextConfig: NextConfig = {
   async rewrites() {
