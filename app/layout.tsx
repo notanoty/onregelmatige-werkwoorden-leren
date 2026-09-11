@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -33,6 +34,15 @@ export default function RootLayout({
         <SiteHeader />
         {children}
         <SiteFooter />
+        {process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID && (
+          <Script
+            defer
+            src="http://146.190.229.9:3005/script.js"
+            data-website-id={process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID}
+            data-domains="onregelmatige-werkwoorden-leren.com,www.onregelmatige-werkwoorden-leren.com"
+            strategy="afterInteractive"
+          />
+        )}
       </body>
     </html>
   );
