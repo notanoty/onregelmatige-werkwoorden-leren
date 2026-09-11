@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       { source: "/stats/script.js", destination: `${UMAMI_ORIGIN}/script.js` },
-      { source: "/api/send", destination: `${UMAMI_ORIGIN}/api/send` },
+      { source: "/stats/api/send", destination: `${UMAMI_ORIGIN}/api/send` },
     ];
   },
 };
