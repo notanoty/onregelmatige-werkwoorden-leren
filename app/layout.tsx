@@ -39,7 +39,7 @@ export default function RootLayout({
             defer
             src="http://146.190.229.9:3005/script.js"
             data-website-id={process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID}
-            data-domains="onregelmatige-werkwoorden-leren.com,www.onregelmatige-werkwoorden-leren.com"
+            data-domains={process.env.NEXT_PUBLIC_UMAMI_DOMAINS}
             strategy="afterInteractive"
           />
         )}
