@@ -104,17 +104,26 @@ function promptFor(verb: TestVerb, language: LanguageCode): string {
   return verb.translations?.[language] || verb.infinitive;
 }
 
-// ── Reducer: a queue/round state machine ────────────────────────────────────
+// ── Reducer: a single-pass queue ────────────────────────────────────────────
 //
-// Cards flow through a `pending` queue. "Didn't know" pushes the card into
-// `nextRound`, which becomes a fresh review round once the current round drains.
-// "Skip" re-queues the card at the end of the current round. Every graded card
-// (knew/didnt) is appended to `log` for the results table.
+// Cards flow through a `pending` queue exactly once. "Skip" re-queues a card
+// at the end of the queue; a miss is logged and counted but NOT auto-requeued
+// for another round — the learner sees every result on the finished screen
+// and opts in to redoing misses from there ("Repeat marked words"), instead
+// of being dropped straight into a review round.
 
 type GradeResult = Extract<VerbResult, 'knew' | 'didnt'>;
 
 /** The clickable cells on the flashcard answer face (auxiliary is bundled into `pastParticiple`). */
 type FlashcardField = 'translation' | 'infinitive' | 'pastSingular' | 'pastPlural' | 'pastParticiple';
+
+const ALL_FLASHCARD_FIELDS: FlashcardField[] = [
+  'translation',
+  'infinitive',
+  'pastSingular',
+  'pastPlural',
+  'pastParticiple',
+];
 
 interface GradedRecord {
   verb: TestVerb;
@@ -122,7 +131,6 @@ interface GradedRecord {
   userAnswer: UserAnswer;
   isCorrect: boolean;
   result: GradeResult;
-  round: number;
   /** Flashcard mode only: which answer cells the learner clicked as "I got this wrong". */
   wrongFields: FlashcardField[];
 }
@@ -130,14 +138,12 @@ interface GradedRecord {
 interface RunnerStateCore {
   mode: TestMode;
   language: LanguageCode;
-  roundNumber: number;
-  /** Distinct cards in the current round (denominator of "Card X / N"). */
-  roundTotal: number;
-  /** Cards graded so far in this round (skips don't count). */
-  doneInRound: number;
+  /** Total cards in this session (denominator of "Card X / N"). */
+  totalCards: number;
+  /** Cards graded so far (skips don't count). */
+  doneCount: number;
   current: TestVerb | null;
   pending: TestVerb[];
-  nextRound: TestVerb[];
   phase: 'prompt' | 'revealed';
   typedAnswer: UserAnswer;
   log: GradedRecord[];
@@ -165,12 +171,10 @@ function init({ verbs, mode, language }: InitArgs): RunnerState {
   return {
     mode,
     language,
-    roundNumber: 1,
-    roundTotal: shuffled.length,
-    doneInRound: 0,
+    totalCards: shuffled.length,
+    doneCount: 0,
     current: shuffled[0] ?? null,
     pending: shuffled.slice(1),
-    nextRound: [],
     phase: 'prompt',
     typedAnswer: createEmptyAnswer(),
     log: [],
@@ -189,21 +193,6 @@ function advance(state: RunnerState): RunnerState {
       pending: state.pending.slice(1),
       phase: 'prompt',
       typedAnswer: createEmptyAnswer(),
-    };
-  }
-  if (state.nextRound.length > 0) {
-    const shuffled = shuffleVerbs(state.nextRound);
-    return {
-      ...state,
-      roundNumber: state.roundNumber + 1,
-      roundTotal: shuffled.length,
-      doneInRound: 0,
-      current: shuffled[0],
-      pending: shuffled.slice(1),
-      nextRound: [],
-      phase: 'prompt',
-      typedAnswer: createEmptyAnswer(),
-      finished: false,
     };
   }
   return { ...state, current: null, phase: 'prompt', finished: true };
@@ -243,7 +232,6 @@ function reducer(state: RunnerState, action: RunnerAction): RunnerState {
         userAnswer,
         isCorrect: state.mode === 'typed' ? isAnswerCorrect(userAnswer, verb) : action.result === 'knew',
         result: action.result,
-        round: state.roundNumber,
         wrongFields: action.wrongFields,
       };
       const isMiss = action.result === 'didnt';
@@ -252,12 +240,11 @@ function reducer(state: RunnerState, action: RunnerAction): RunnerState {
         history: [...state.history, snapshotOf(state)],
         log: [...state.log, record],
         counts: { ...state.counts, [action.result]: state.counts[action.result] + 1 },
-        nextRound: isMiss ? [...state.nextRound, verb] : state.nextRound,
         sessionMarked:
           isMiss && !state.sessionMarked.includes(verb.infinitive)
             ? [...state.sessionMarked, verb.infinitive]
             : state.sessionMarked,
-        doneInRound: state.doneInRound + 1,
+        doneCount: state.doneCount + 1,
       });
     }
 
@@ -300,32 +287,25 @@ function reducer(state: RunnerState, action: RunnerAction): RunnerState {
 function ProgressHeader({
   mode,
   language,
-  roundNumber,
   cardNumber,
-  roundTotal,
+  totalCards,
   remaining,
   markedThisSession,
 }: {
   mode: TestMode;
   language: LanguageCode;
-  roundNumber: number;
   cardNumber: number;
-  roundTotal: number;
+  totalCards: number;
   remaining: number;
   markedThisSession: number;
 }) {
-  const percent = roundTotal > 0 ? Math.round(((cardNumber - 1) / roundTotal) * 100) : 0;
+  const percent = totalCards > 0 ? Math.round(((cardNumber - 1) / totalCards) * 100) : 0;
 
   return (
     <div className="flex flex-col gap-3 text-foreground">
-      {roundNumber > 1 ? (
-        <p className="text-lg font-bold text-destructive">
-          Review round {roundNumber} — words you didn&apos;t know
-        </p>
-      ) : null}
       <div className="flex items-center justify-between text-lg font-semibold">
         <span>
-          Card {cardNumber} / {roundTotal}
+          Card {cardNumber} / {totalCards}
         </span>
         <span>{remaining} left</span>
       </div>
@@ -433,6 +413,8 @@ function ConjugationReveal({
   canGoBack,
   onBack,
   onSkip,
+  allWrong,
+  onToggleAllWrong,
 }: {
   verb: TestVerb;
   translation: string;
@@ -442,6 +424,8 @@ function ConjugationReveal({
   canGoBack: boolean;
   onBack: () => void;
   onSkip: () => void;
+  allWrong: boolean;
+  onToggleAllWrong: () => void;
 }) {
   return (
     <div className="flex h-full w-full flex-col gap-4 bg-background p-4 text-foreground shadow-[inset_0_0_70px_rgba(120,72,30,0.18)] sm:gap-5 sm:p-6">
@@ -496,7 +480,27 @@ function ConjugationReveal({
           </TableBody>
         </Table>
       </div>
-      <div className="mt-auto flex justify-center">
+      {/* Stacked, not side-by-side: Next must stay pinned to this exact bottom
+          spot (same place as "Reveal" on the front face) regardless of what
+          sits above it, so the learner never has to move the mouse between
+          cards. Didn't-know-it is a small, borderless, easy-to-ignore side
+          action above it. */}
+      <div className="mt-auto flex flex-col items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onToggleAllWrong}
+          aria-pressed={allWrong}
+          className={cn(
+            'h-auto rounded-md border-0 px-2.5 py-1 text-xs font-medium shadow-none',
+            allWrong
+              ? 'bg-destructive/10 text-destructive hover:bg-destructive/15'
+              : 'text-muted-foreground hover:bg-transparent hover:text-foreground'
+          )}
+        >
+          {allWrong ? '✓' : '✗'} Didn&apos;t know it
+        </Button>
         <Button type="button" onClick={onNext} className={ACTION_BUTTON_CLASS}>
           Next
         </Button>
@@ -564,9 +568,8 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
     current,
     phase,
     finished,
-    roundNumber,
-    roundTotal,
-    doneInRound,
+    totalCards,
+    doneCount,
     counts,
     sessionMarked,
     typedAnswer,
@@ -605,6 +608,18 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
         next.add(field);
       }
       return next;
+    });
+  };
+
+  const allFieldsWrong = ALL_FLASHCARD_FIELDS.every((field) => wrongFields.has(field));
+
+  const toggleAllWrong = () => {
+    if (phase !== 'revealed') {
+      return;
+    }
+    setWrongFields((previous) => {
+      const allMarked = ALL_FLASHCARD_FIELDS.every((field) => previous.has(field));
+      return allMarked ? new Set() : new Set(ALL_FLASHCARD_FIELDS);
     });
   };
 
@@ -816,26 +831,23 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
   }
 
   const prompt = promptFor(current, translationLanguage);
-  const cardNumber = doneInRound + 1;
-  const remaining = roundTotal - doneInRound;
+  const cardNumber = doneCount + 1;
+  const remaining = totalCards - doneCount;
   const isFlashcard = mode === 'flashcard';
 
+  // Typed mode only: flashcard mode has its own Skip/Back/Didn't-know controls
+  // built into the card (see CardTopControls and ConjugationReveal).
   const skipButton = (
     <Button type="button" onClick={skip} variant="outline" className={GRADE_BUTTON_CLASS}>
       Skip ↷
     </Button>
   );
-  const didntKnowButton = (
-    <Button type="button" onClick={() => grade('didnt')} variant="destructive" className={GRADE_BUTTON_CLASS}>
-      ✗ Didn&apos;t know it
-    </Button>
-  );
-  // Typed mode keeps Skip below the card; flashcard mode moves it onto the
-  // card itself (see CardTopControls) so only "Didn't know" stays here.
   const gradeButtons = (
     <div className="flex flex-wrap justify-center gap-3">
-      {didntKnowButton}
-      {!isFlashcard ? skipButton : null}
+      <Button type="button" onClick={() => grade('didnt')} variant="destructive" className={GRADE_BUTTON_CLASS}>
+        ✗ Didn&apos;t know it
+      </Button>
+      {skipButton}
     </div>
   );
 
@@ -844,9 +856,8 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
       <ProgressHeader
         mode={mode}
         language={translationLanguage}
-        roundNumber={roundNumber}
         cardNumber={cardNumber}
-        roundTotal={roundTotal}
+        totalCards={totalCards}
         remaining={remaining}
         markedThisSession={sessionMarked.length}
       />
@@ -906,14 +917,13 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
                     canGoBack={canGoBack}
                     onBack={back}
                     onSkip={skip}
+                    allWrong={allFieldsWrong}
+                    onToggleAllWrong={toggleAllWrong}
                   />
                 </motion.div>
               )}
             </AnimatePresence>
           </Card>
-
-          {/* Back/Skip live on the card itself; only "Didn't know" sits below it. */}
-          {phase === 'revealed' ? gradeButtons : null}
         </>
       ) : (
         <>
