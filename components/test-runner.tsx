@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useReducer, useRef } from 'react';
+import { useEffect, useReducer, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -113,6 +113,9 @@ function promptFor(verb: TestVerb, language: LanguageCode): string {
 
 type GradeResult = Extract<VerbResult, 'knew' | 'didnt'>;
 
+/** The clickable cells on the flashcard answer face (auxiliary is bundled into `pastParticiple`). */
+type FlashcardField = 'translation' | 'infinitive' | 'pastSingular' | 'pastPlural' | 'pastParticiple';
+
 interface GradedRecord {
   verb: TestVerb;
   prompt: string;
@@ -120,9 +123,11 @@ interface GradedRecord {
   isCorrect: boolean;
   result: GradeResult;
   round: number;
+  /** Flashcard mode only: which answer cells the learner clicked as "I got this wrong". */
+  wrongFields: FlashcardField[];
 }
 
-interface RunnerState {
+interface RunnerStateCore {
   mode: TestMode;
   language: LanguageCode;
   roundNumber: number;
@@ -139,6 +144,18 @@ interface RunnerState {
   sessionMarked: string[];
   counts: { knew: number; didnt: number; skipped: number };
   finished: boolean;
+}
+
+interface RunnerState extends RunnerStateCore {
+  /** Snapshots taken right before each GRADE/SKIP, popped by BACK to fully undo them. */
+  history: RunnerStateCore[];
+}
+
+/** A snapshot of everything BACK needs to restore, i.e. state minus its own history stack. */
+function snapshotOf(state: RunnerState): RunnerStateCore {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { history, ...core } = state;
+  return core;
 }
 
 type InitArgs = { verbs: TestVerb[]; mode: TestMode; language: LanguageCode };
@@ -160,6 +177,7 @@ function init({ verbs, mode, language }: InitArgs): RunnerState {
     sessionMarked: [],
     counts: { knew: 0, didnt: 0, skipped: 0 },
     finished: shuffled.length === 0,
+    history: [],
   };
 }
 
@@ -195,8 +213,9 @@ type RunnerAction =
   | { type: 'RESTART'; payload: InitArgs }
   | { type: 'REVEAL' }
   | { type: 'SET_TYPED'; field: AnswerField; value: string }
-  | { type: 'GRADE'; result: GradeResult }
-  | { type: 'SKIP' };
+  | { type: 'GRADE'; result: GradeResult; wrongFields: FlashcardField[] }
+  | { type: 'SKIP' }
+  | { type: 'BACK' };
 
 function reducer(state: RunnerState, action: RunnerAction): RunnerState {
   switch (action.type) {
@@ -225,10 +244,12 @@ function reducer(state: RunnerState, action: RunnerAction): RunnerState {
         isCorrect: state.mode === 'typed' ? isAnswerCorrect(userAnswer, verb) : action.result === 'knew',
         result: action.result,
         round: state.roundNumber,
+        wrongFields: action.wrongFields,
       };
       const isMiss = action.result === 'didnt';
       return advance({
         ...state,
+        history: [...state.history, snapshotOf(state)],
         log: [...state.log, record],
         counts: { ...state.counts, [action.result]: state.counts[action.result] + 1 },
         nextRound: isMiss ? [...state.nextRound, verb] : state.nextRound,
@@ -247,11 +268,25 @@ function reducer(state: RunnerState, action: RunnerAction): RunnerState {
       const requeued = [...state.pending, state.current];
       return {
         ...state,
+        history: [...state.history, snapshotOf(state)],
         counts: { ...state.counts, skipped: state.counts.skipped + 1 },
         current: requeued[0],
         pending: requeued.slice(1),
         phase: 'prompt',
         typedAnswer: createEmptyAnswer(),
+      };
+    }
+
+    case 'BACK': {
+      if (state.history.length === 0) {
+        return state;
+      }
+      const previous = state.history[state.history.length - 1];
+      return {
+        ...previous,
+        phase: 'prompt',
+        typedAnswer: createEmptyAnswer(),
+        history: state.history.slice(0, -1),
       };
     }
 
@@ -318,24 +353,101 @@ const REVEAL_ROWS: { field: AnswerField; label: string }[] = ANSWER_FIELDS.map((
   label: ANSWER_FIELD_LABELS[field],
 }));
 
+/** One clickable answer cell: click toggles "I got this wrong" for the field. */
+function AnswerCell({
+  field,
+  isWrong,
+  onToggle,
+  emphasize,
+  children,
+}: {
+  field: FlashcardField;
+  isWrong: boolean;
+  onToggle: (field: FlashcardField) => void;
+  emphasize?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <TableCell className="p-0 align-top">
+      <button
+        type="button"
+        data-field-toggle
+        aria-pressed={isWrong}
+        onClick={() => onToggle(field)}
+        className={cn(
+          'w-full whitespace-normal break-words px-2 py-2 text-left text-sm text-card-foreground transition-colors sm:px-3',
+          emphasize && 'font-semibold',
+          isWrong ? 'bg-destructive/15 text-destructive' : 'hover:bg-destructive/5'
+        )}
+      >
+        {children}
+      </button>
+    </TableCell>
+  );
+}
+
+/**
+ * Back / Skip row shown on both flashcard faces (front prompt and answer
+ * reveal) so the learner can navigate without hunting for buttons below the
+ * card.
+ */
+function CardTopControls({
+  canGoBack,
+  onBack,
+  onSkip,
+}: {
+  canGoBack: boolean;
+  onBack: () => void;
+  onSkip: () => void;
+}) {
+  return (
+    <div className="mb-2 flex w-full items-center justify-between">
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={onBack}
+        disabled={!canGoBack}
+        className={cn(TEXT_BUTTON_CLASS, 'disabled:pointer-events-none disabled:opacity-40')}
+      >
+        ← Back
+      </Button>
+      <Button type="button" variant="ghost" onClick={onSkip} className={TEXT_BUTTON_CLASS}>
+        Skip →
+      </Button>
+    </div>
+  );
+}
+
 /**
  * Flashcard reveal: a full-bleed answer card that slides up to cover the prompt.
  * Shows the conjugation table (same style as the main words table) plus the
- * translation. Clicking "Next →" counts as correct and advances the queue.
+ * translation. Each cell can be clicked to mark it as answered wrong; clicking
+ * "Next →" grades the card (didn't know if anything was marked wrong).
  */
 function ConjugationReveal({
   verb,
   translation,
+  wrongFields,
+  onToggleField,
   onNext,
+  canGoBack,
+  onBack,
+  onSkip,
 }: {
   verb: TestVerb;
   translation: string;
+  wrongFields: Set<FlashcardField>;
+  onToggleField: (field: FlashcardField) => void;
   onNext: () => void;
+  canGoBack: boolean;
+  onBack: () => void;
+  onSkip: () => void;
 }) {
   return (
     <div className="flex h-full w-full flex-col gap-4 bg-background p-4 text-foreground shadow-[inset_0_0_70px_rgba(120,72,30,0.18)] sm:gap-5 sm:p-6">
+      <CardTopControls canGoBack={canGoBack} onBack={onBack} onSkip={onSkip} />
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-        Answer
+        Answer <span className="normal-case tracking-normal">— tap anything you got wrong</span>
       </p>
       <div className="overflow-hidden rounded-lg border-2 border-foreground">
         <Table className="table-fixed">
@@ -360,21 +472,26 @@ function ConjugationReveal({
           </TableHeader>
           <TableBody>
             <TableRow className="bg-card">
-              <TableCell className="whitespace-normal break-words px-2 py-2 align-top text-sm text-card-foreground sm:px-3">
+              <AnswerCell field="translation" isWrong={wrongFields.has('translation')} onToggle={onToggleField}>
                 {translation}
-              </TableCell>
-              <TableCell className="whitespace-normal break-words px-2 py-2 align-top text-sm font-semibold text-card-foreground sm:px-3">
+              </AnswerCell>
+              <AnswerCell
+                field="infinitive"
+                isWrong={wrongFields.has('infinitive')}
+                onToggle={onToggleField}
+                emphasize
+              >
                 {verb.infinitive}
-              </TableCell>
-              <TableCell className="whitespace-normal break-words px-2 py-2 align-top text-sm text-card-foreground sm:px-3">
+              </AnswerCell>
+              <AnswerCell field="pastSingular" isWrong={wrongFields.has('pastSingular')} onToggle={onToggleField}>
                 {verb.pastSingular}
-              </TableCell>
-              <TableCell className="whitespace-normal break-words px-2 py-2 align-top text-sm text-card-foreground sm:px-3">
+              </AnswerCell>
+              <AnswerCell field="pastPlural" isWrong={wrongFields.has('pastPlural')} onToggle={onToggleField}>
                 {verb.pastPlural}
-              </TableCell>
-              <TableCell className="whitespace-normal break-words px-2 py-2 align-top text-sm text-card-foreground sm:px-3">
+              </AnswerCell>
+              <AnswerCell field="pastParticiple" isWrong={wrongFields.has('pastParticiple')} onToggle={onToggleField}>
                 {verb.pastParticiple} <span className="font-semibold">({verb.auxiliary})</span>
-              </TableCell>
+              </AnswerCell>
             </TableRow>
           </TableBody>
         </Table>
@@ -454,7 +571,9 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
     sessionMarked,
     typedAnswer,
     log,
+    history,
   } = state;
+  const canGoBack = history.length > 0;
 
   const totalWords = verbs.length;
   const sessionCountedRef = useRef(false);
@@ -470,6 +589,25 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
     }
   }, [finished, totalWords]);
 
+  // Flashcard mode: cells the learner has tapped as "I got this wrong" for the
+  // current card. Cleared each time a new card is revealed.
+  const [wrongFields, setWrongFields] = useState<Set<FlashcardField>>(new Set());
+
+  const toggleWrongField = (field: FlashcardField) => {
+    if (phase !== 'revealed') {
+      return;
+    }
+    setWrongFields((previous) => {
+      const next = new Set(previous);
+      if (next.has(field)) {
+        next.delete(field);
+      } else {
+        next.add(field);
+      }
+      return next;
+    });
+  };
+
   const reveal = () => {
     if (phase !== 'prompt') {
       return;
@@ -477,6 +615,7 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
     if (mode === 'typed' && typeof document !== 'undefined') {
       (document.activeElement as HTMLElement | null)?.blur();
     }
+    setWrongFields(new Set());
     dispatch({ type: 'REVEAL' });
   };
 
@@ -484,8 +623,9 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
     if (!current || phase !== 'revealed') {
       return;
     }
-    recordResult(current.infinitive, result);
-    dispatch({ type: 'GRADE', result });
+    const effectiveResult: GradeResult = wrongFields.size > 0 ? 'didnt' : result;
+    recordResult(current.infinitive, effectiveResult);
+    dispatch({ type: 'GRADE', result: effectiveResult, wrongFields: Array.from(wrongFields) });
   };
 
   const skip = () => {
@@ -494,6 +634,14 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
     }
     recordResult(current.infinitive, 'skipped');
     dispatch({ type: 'SKIP' });
+  };
+
+  const back = () => {
+    if (!canGoBack) {
+      return;
+    }
+    setWrongFields(new Set());
+    dispatch({ type: 'BACK' });
   };
 
   const restart = (subset?: TestVerb[]) => {
@@ -509,7 +657,10 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
       const target = event.target as HTMLElement | null;
       const inField =
         !!target &&
-        (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA');
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'SELECT' ||
+          target.tagName === 'TEXTAREA' ||
+          !!target.closest('[data-field-toggle]'));
 
       if (phase === 'prompt') {
         if (event.key === 'Enter' || (event.key === ' ' && !inField)) {
@@ -518,6 +669,9 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
         } else if ((event.key === 's' || event.key === 'S') && !inField) {
           event.preventDefault();
           skip();
+        } else if ((event.key === 'b' || event.key === 'B') && !inField) {
+          event.preventDefault();
+          back();
         }
         return;
       }
@@ -535,13 +689,16 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
       } else if (event.key === 's' || event.key === 'S') {
         event.preventDefault();
         skip();
+      } else if (event.key === 'b' || event.key === 'B') {
+        event.preventDefault();
+        back();
       }
     }
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, finished, current, mode]);
+  }, [phase, finished, current, mode, wrongFields, canGoBack]);
 
   // ── Empty selection ──
   if (totalWords === 0) {
@@ -591,20 +748,24 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
               </TableRow>
             </TableHeader>
             <TableBody>
-              {log.map((record, index) => (
+              {log.map((record, index) => {
+                const wrong = (field: FlashcardField) => record.wrongFields.includes(field);
+                const wrongCellClass = (field: FlashcardField) =>
+                  cn('px-4 py-3 text-card-foreground', wrong(field) && 'bg-destructive/10 font-semibold text-destructive');
+                return (
                 <TableRow
                   key={`${record.verb.infinitive}-${index}`}
                   className="bg-card even:bg-background/40 hover:bg-card"
                 >
                   <TableCell className="px-4 py-3 text-card-foreground">{index + 1}</TableCell>
-                  <TableCell className="px-4 py-3 text-card-foreground">{record.prompt}</TableCell>
-                  <TableCell className="px-4 py-3 font-semibold text-card-foreground">
+                  <TableCell className={wrongCellClass('translation')}>{record.prompt}</TableCell>
+                  <TableCell className={cn('font-semibold', wrongCellClass('infinitive'))}>
                     {record.verb.infinitive}
                   </TableCell>
-                  <TableCell className="px-4 py-3 text-card-foreground">{record.verb.pastSingular}</TableCell>
-                  <TableCell className="px-4 py-3 text-card-foreground">{record.verb.pastPlural}</TableCell>
-                  <TableCell className="px-4 py-3 text-card-foreground">{record.verb.pastParticiple}</TableCell>
-                  <TableCell className="px-4 py-3 text-card-foreground">{record.verb.auxiliary}</TableCell>
+                  <TableCell className={wrongCellClass('pastSingular')}>{record.verb.pastSingular}</TableCell>
+                  <TableCell className={wrongCellClass('pastPlural')}>{record.verb.pastPlural}</TableCell>
+                  <TableCell className={wrongCellClass('pastParticiple')}>{record.verb.pastParticiple}</TableCell>
+                  <TableCell className={wrongCellClass('pastParticiple')}>{record.verb.auxiliary}</TableCell>
                   {isTyped ? (
                     <TableCell className="px-4 py-3 text-card-foreground">
                       <div>{record.userAnswer.infinitive || '—'}</div>
@@ -623,7 +784,8 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
                     {record.result === 'knew' ? 'Knew it' : "Didn't know"}
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -663,17 +825,17 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
       Skip ↷
     </Button>
   );
+  const didntKnowButton = (
+    <Button type="button" onClick={() => grade('didnt')} variant="destructive" className={GRADE_BUTTON_CLASS}>
+      ✗ Didn&apos;t know it
+    </Button>
+  );
+  // Typed mode keeps Skip below the card; flashcard mode moves it onto the
+  // card itself (see CardTopControls) so only "Didn't know" stays here.
   const gradeButtons = (
-    <div className="flex flex-wrap gap-3">
-      {/*<Button*/}
-      {/*  type="button"*/}
-      {/*  onClick={() => grade('didnt')}*/}
-      {/*  variant="destructive"*/}
-      {/*  className={GRADE_BUTTON_CLASS}*/}
-      {/*>*/}
-      {/*  ✗ Didn&apos;t know it*/}
-      {/*</Button>*/}
-      {skipButton}
+    <div className="flex flex-wrap justify-center gap-3">
+      {didntKnowButton}
+      {!isFlashcard ? skipButton : null}
     </div>
   );
 
@@ -694,6 +856,11 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
           {/* The prompt word stays put; the opaque answer panel slides up over
               it to reveal and slides back down to hide. */}
           <Card className="relative flex min-h-[24rem] flex-col items-center justify-center gap-0 overflow-hidden rounded-3xl border-2 border-foreground bg-card p-5 text-center text-card-foreground sm:p-8">
+            {/* Persistent controls for the front face; ConjugationReveal renders
+                its own copy for the answer face (the sliding panel covers this one). */}
+            <div className="absolute inset-x-0 top-0 px-5 pt-4 sm:px-8 sm:pt-6">
+              <CardTopControls canGoBack={canGoBack} onBack={back} onSkip={skip} />
+            </div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Shown word
             </p>
@@ -733,15 +900,20 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
                   <ConjugationReveal
                     verb={current}
                     translation={prompt}
+                    wrongFields={wrongFields}
+                    onToggleField={toggleWrongField}
                     onNext={() => grade('knew')}
+                    canGoBack={canGoBack}
+                    onBack={back}
+                    onSkip={skip}
                   />
                 </motion.div>
               )}
             </AnimatePresence>
           </Card>
 
-          {/* Grade / skip buttons sit underneath the card. */}
-          {phase === 'prompt' ? <div className="flex flex-wrap gap-3">{skipButton}</div> : gradeButtons}
+          {/* Back/Skip live on the card itself; only "Didn't know" sits below it. */}
+          {phase === 'revealed' ? gradeButtons : null}
         </>
       ) : (
         <>
@@ -811,9 +983,15 @@ export function TestRunner({ verbs, mode, showInfinitive, translationLanguage }:
 
       <p className="text-sm text-muted-foreground">
         {phase === "prompt" ? (
-          <>{mode === "typed" ? "Enter" : "Space"} to reveal &middot; S to skip</>
+          <>
+            {mode === "typed" ? "Enter" : "Space"} to reveal &middot; S to skip
+            {canGoBack ? <> &middot; B to go back</> : null}
+          </>
         ) : (
-          <>Enter / K &mdash; Next (knew) &middot; 2 / D &mdash; Didn&apos;t know &middot; S &mdash; Skip</>
+          <>
+            Enter / K &mdash; Next (knew) &middot; 2 / D &mdash; Didn&apos;t know &middot; S &mdash; Skip
+            {canGoBack ? <> &middot; B &mdash; Back</> : null}
+          </>
         )}
       </p>
     </PageShell>
